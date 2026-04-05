@@ -2,7 +2,7 @@
 name: spec-reviewer
 description: 명세 분석 및 검토 전문가. 자연어 요구사항을 구조화된 기능 명세(함수 시그니처, edge case, 예상 동작)로 변환한다. 정책 문서와 설계 문서를 기존 코드, 정책, 아키텍처와의 일관성 관점에서 종합 검토한다. 새로운 .md 파일이 작성되거나 수정될 때, 또는 자연어 요구사항을 구조화해야 할 때 자동으로 사용한다.
 tools: Read, Grep, Glob, Bash, Write, Edit
-model: sonnet
+model: claude-sonnet-4-6
 memory: project
 ---
 
@@ -198,6 +198,57 @@ R2에서 "{모호한 표현}"의 의미를 확인해야 합니다.
   - 테스트 전략
   - 롤백 가능 여부
 - 설계에서 결정을 미루거나 "추후 결정"으로 넘긴 항목이 과도하지 않은지 확인한다.
+
+---
+
+## Gemini 교차 검토 (선택적 2차 의견)
+
+주요 검토 절차 완료 후, Gemini API를 호출하여 누락된 이슈를 추가로 확인한다.
+
+### 실행 시점
+- 아키텍처 전반에 영향을 미치는 설계 문서
+- 코드베이스 전체에 영향을 주는 정책 문서
+- 복잡한 Edge Case가 있는 기능 명세
+
+### 실행 방법
+
+Bash 도구로 Gemini API를 호출하여 문서 내용을 교차 검토한다:
+
+```bash
+DOCUMENT_CONTENT=$(cat {대상_파일_경로})
+
+curl -s -X POST \
+  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"contents\": [{
+      \"parts\": [{
+        \"text\": \"You are a technical document reviewer. Review the following document for: (1) logical consistency, (2) missing edge cases, (3) ambiguous requirements, (4) security considerations, (5) completeness. Be concise and specific.\n\n${DOCUMENT_CONTENT}\"
+      }]
+    }]
+  }" | jq -r '.candidates[0].content.parts[0].text'
+```
+
+> **사전 조건**: `GEMINI_API_KEY` 환경 변수가 설정되어 있어야 한다. 미설정 시 이 단계를 건너뛰고 보고서에 명시한다.
+>
+> **API 키 발급**: [Google AI Studio](https://aistudio.google.com/app/apikey) 접속 → **Create API key** 클릭 → 키 복사
+>
+> **환경 변수 등록 (macOS/Linux)**:
+> ```bash
+> echo 'export GEMINI_API_KEY="발급받은_키"' >> ~/.zshrc
+> source ~/.zshrc
+> ```
+>
+> **모델 변경**: 위 curl 명령의 `gemini-2.0-flash` 부분을 교체하면 다른 모델 사용 가능.
+> - `gemini-2.0-flash` — 빠른 응답, 일반 검토에 적합 (기본값)
+> - `gemini-2.5-pro` — 높은 정확도, 복잡한 설계 문서 검토에 적합
+
+### Gemini 결과 처리 방법
+
+- Gemini의 지적 사항을 자체 검토 결과와 비교한다.
+- 기존 이슈 목록에 **없는 새로운 지적**이면 이슈로 추가하되, 출처를 `[Gemini]`로 표기한다.
+- 기존 이슈와 **겹치는 지적**이면 해당 이슈의 근거로 보강 기재한다.
+- 실제 코드/정책과 **상충하는 Gemini 지적**은 무시한다 (사실 기반 검토가 우선).
 
 ---
 

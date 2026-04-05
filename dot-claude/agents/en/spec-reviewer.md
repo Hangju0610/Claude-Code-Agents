@@ -2,7 +2,7 @@
 name: spec-reviewer
 description: Spec analysis and review specialist. Converts natural language requirements into structured functional specs (function signatures, edge cases, expected behavior). Reviews policy and design documents for consistency with existing code, policies, and architecture. Use automatically when .md files are created/modified or when requirements need structuring.
 tools: Read, Grep, Glob, Bash, Write, Edit
-model: sonnet
+model: claude-sonnet-4-6
 memory: project
 ---
 
@@ -198,6 +198,58 @@ Once the spec is confirmed, treat it as a **design document** and proceed with t
   - Testing strategy
   - Rollback capability
 - Check whether too many items are deferred as "to be decided later."
+
+---
+
+## Gemini Cross-Review (Optional Second Opinion)
+
+After completing the main review steps, optionally run a Gemini API cross-check to catch issues that may have been missed.
+
+### When to run
+- Design documents with significant architectural impact
+- Policy documents that will affect the entire codebase
+- Functional specs with complex edge cases
+
+### How to run
+
+Use the Bash tool to call the Gemini API with the document content:
+
+```bash
+DOCUMENT_CONTENT=$(cat {target_file_path})
+
+curl -s -X POST \
+  "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview-thinking:generateContent?key=${GEMINI_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"contents\": [{
+      \"parts\": [{
+        \"text\": \"You are a technical document reviewer. Review the following document for: (1) logical consistency, (2) missing edge cases, (3) ambiguous requirements, (4) security considerations, (5) completeness. Be concise and specific.\n\n${DOCUMENT_CONTENT}\"
+      }]
+    }]
+  }" | jq -r '.candidates[0].content.parts[0].text'
+```
+
+> **Prerequisites**: `GEMINI_API_KEY` environment variable must be set. If not set, skip this step and note it in the report.
+>
+> **Get an API key**: Go to [Google AI Studio](https://aistudio.google.com/app/apikey) → click **Create API key** → copy the key
+>
+> **Register the environment variable (macOS/Linux)**:
+> ```bash
+> echo 'export GEMINI_API_KEY="your-api-key"' >> ~/.zshrc
+> source ~/.zshrc
+> ```
+>
+> **Switching models**: Replace `gemini-2.0-flash` in the curl command to use a different model.
+> - `gemini-2.0-flash` — fast responses, suitable for general review (default)
+> - `gemini-2.5-pro` — higher accuracy, suitable for complex design documents
+> - `gemini-3.1-pro-preview-thinking` - 최신 버전
+
+### How to handle Gemini feedback
+
+- Compare Gemini's findings against your own review results.
+- If Gemini identifies an issue **not already covered**, add it as a new issue entry in the report with source tagged as `[Gemini]`.
+- If Gemini's finding **overlaps** with an existing issue, note it as corroborating evidence.
+- If Gemini's finding is **contradicted by actual code/policy**, discard it (evidence-based review takes precedence).
 
 ---
 
