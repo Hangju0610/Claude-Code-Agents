@@ -33,6 +33,15 @@
         ]
       },
       {
+        "matcher": "api-docs-writer",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/on-api-docs-complete.sh"
+          }
+        ]
+      },
+      {
         "matcher": "code-reviewer-claude|code-reviewer-codex",
         "hooks": [
           {
